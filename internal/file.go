@@ -148,12 +148,12 @@ func (f *UnsealedEncFile) GoString() string {
 func (f *EncFile) Unseal(privKey *PrivateKey) (*UnsealedEncFile, error) {
 	keyBox := f.getKeyBox(privKey.publicKey())
 	if keyBox == nil {
-		return nil, fmt.Errorf("no key box found for key labeled %q", privKey.label)
+		return nil, fmt.Errorf("no key box found for key labeled %q", privKey.Label)
 	}
 	var fileKey [32]byte
 	out, ok := box.OpenAnonymous(fileKey[:0], keyBox.boxedKey, keyBox.pubKey.bytes, privKey.bytes)
 	if !ok || len(out) != len(fileKey) {
-		return nil, fmt.Errorf("unboxing key failed with private key %q", privKey.label)
+		return nil, fmt.Errorf("unboxing key failed with private key %q", privKey.Label)
 	}
 	return &UnsealedEncFile{EncFile: f, fileKey: &fileKey}, nil
 }
@@ -250,7 +250,7 @@ func (b *KeyBox) MarshalString() string {
 	return fmt.Sprintf("devcrypt-keybox %s %s %s",
 		base64.StdEncoding.EncodeToString(b.boxedKey),
 		b.pubKey.Base64Key(),
-		b.pubKey.label,
+		b.pubKey.Label,
 	)
 }
 
@@ -279,6 +279,6 @@ func (b *KeyBox) UnmarshalString(data string) error {
 		return fmt.Errorf("pubkey decode: %w", err)
 	}
 
-	b.pubKey.label = fields[3]
+	b.pubKey.Label = fields[3]
 	return nil
 }

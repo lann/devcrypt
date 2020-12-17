@@ -32,11 +32,11 @@ func GenerateKey(label string) (*PublicKey, *PrivateKey, error) {
 		return nil, nil, err
 	}
 	pubKey := &PublicKey{
-		label: label,
+		Label: label,
 		bytes: pubKeyBytes,
 	}
 	privKey := &PrivateKey{
-		label: label,
+		Label: label,
 		bytes: privKeyBytes,
 	}
 	return pubKey, privKey, nil
@@ -44,7 +44,7 @@ func GenerateKey(label string) (*PublicKey, *PrivateKey, error) {
 
 // PublicKey stores the public key and label.
 type PublicKey struct {
-	label string
+	Label string
 	bytes *[32]byte
 }
 
@@ -57,7 +57,7 @@ func (k *PublicKey) Base64Key() string {
 func (k *PublicKey) MarshalString() string {
 	return fmt.Sprintf("devcrypt-key %s %s",
 		k.Base64Key(),
-		k.label,
+		k.Label,
 	)
 }
 
@@ -79,19 +79,19 @@ func (k *PublicKey) UnmarshalString(data string) error {
 	if err := base64DecodeKey(k.bytes, fields[1]); err != nil {
 		return fmt.Errorf("decode public key: %w", err)
 	}
-	k.label = fields[2]
+	k.Label = fields[2]
 	return nil
 }
 
 // PrivateKey stores the private key and label.
 type PrivateKey struct {
-	label string
+	Label string
 	bytes *[32]byte
 }
 
 func (k *PrivateKey) publicKey() *PublicKey {
 	// DANGER: this depends on the undocumented internals of golang.org/x/crypto/nacl/box !!!
-	pubKey := &PublicKey{label: k.label, bytes: new([32]byte)}
+	pubKey := &PublicKey{Label: k.Label, bytes: new([32]byte)}
 	curve25519.ScalarBaseMult(pubKey.bytes, k.bytes)
 	return pubKey
 }
@@ -100,7 +100,7 @@ func (k *PrivateKey) publicKey() *PublicKey {
 func (k *PrivateKey) Marshal() ([]byte, error) {
 	block := &pem.Block{
 		Type:    privateKeyBlockType,
-		Headers: map[string]string{"Label": k.label},
+		Headers: map[string]string{"Label": k.Label},
 		Bytes:   k.bytes[:],
 	}
 	var buf bytes.Buffer
@@ -116,7 +116,7 @@ func (k *PrivateKey) Unmarshal(blockBytes []byte) error {
 	if block == nil || len(bytes.TrimSpace(rest)) != 0 {
 		return errBadKeyEncoding
 	}
-	k.label = block.Headers["Label"]
+	k.Label = block.Headers["Label"]
 	if k.bytes == nil {
 		k.bytes = new([32]byte)
 	}
@@ -129,7 +129,7 @@ func (k *PrivateKey) Unmarshal(blockBytes []byte) error {
 
 // GoString doesn't print the private key bytes.
 func (k *PrivateKey) GoString() string {
-	return fmt.Sprintf("PrivateKey{label: %q}", k.label)
+	return fmt.Sprintf("PrivateKey{Label: %q}", k.Label)
 }
 
 func base64DecodeKey(key *[32]byte, data string) error {

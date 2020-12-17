@@ -3,10 +3,8 @@ package cmd
 import (
 	"fmt"
 	"io/ioutil"
-	"os"
 	"strings"
 
-	"github.com/lann/devcrypt/internal"
 	"github.com/spf13/cobra"
 )
 
@@ -36,38 +34,24 @@ var decryptCmd = &cobra.Command{
 			}
 		}
 
-		inFile, err := os.Open(input)
+		// Read and unseal encryped file
+		unsealedFile, err := unsealFile(input)
 		if err != nil {
-			return fmt.Errorf("opening encrypted file: %w", err)
+			return err
 		}
-		defer inFile.Close()
 
 		// Get user key
-		privKey, err := readPrivateKey()
-		if err != nil {
-			return fmt.Errorf("reading private key: %w", err)
-		}
-
-		encFile := &internal.EncFile{}
-		if _, err := encFile.ReadFrom(inFile); err != nil {
-			return fmt.Errorf("reading encrypted file: %w", err)
-		}
-
-		unsealedFile, err := encFile.Unseal(privKey)
-		if err != nil {
-			return fmt.Errorf("unsealing file: %w", err)
-		}
-
 		plaintext, err := unsealedFile.Decrypt()
 		if err != nil {
 			return fmt.Errorf("decrypting file: %w", err)
 		}
 
+		// Write decrypted file
 		if err := ioutil.WriteFile(output, plaintext, 0600); err != nil {
 			return fmt.Errorf("writing output: %w", err)
 		}
 
-		fmt.Printf("Wrote to %q\n", output)
+		fmt.Printf("Decrypted to %q\n", output)
 
 		return nil
 	},

@@ -62,6 +62,8 @@ var encryptCmd = &cobra.Command{
 			return fmt.Errorf("writing outout: %w", err)
 		}
 
+		fmt.Printf("Encrypted to %q\n", output)
+
 		return nil
 	},
 }
