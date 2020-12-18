@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -9,12 +10,7 @@ import (
 	"github.com/lann/devcrypt/internal"
 )
 
-func unsealFile(path string) (*internal.UnsealedEncFile, error) {
-	privKey, err := readPrivateKey()
-	if err != nil {
-		return nil, fmt.Errorf("reading private key: %w", err)
-	}
-
+func readEncFile(path string) (*internal.EncFile, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("opening encrypted file: %w", err)
@@ -25,12 +21,46 @@ func unsealFile(path string) (*internal.UnsealedEncFile, error) {
 	if _, err := encFile.ReadFrom(f); err != nil {
 		return nil, fmt.Errorf("reading encrypted file: %w", err)
 	}
+	return encFile, err
+}
+
+func unsealFile(path string) (*internal.UnsealedEncFile, error) {
+	privKey, err := readUserPrivateKey()
+	if err != nil {
+		return nil, fmt.Errorf("reading private key: %w", err)
+	}
+
+	encFile, err := readEncFile(path)
+	if err != nil {
+		return nil, err
+	}
 
 	unsealedFile, err := encFile.Unseal(privKey)
 	if err != nil {
 		return nil, fmt.Errorf("unsealing file: %w", err)
 	}
 	return unsealedFile, nil
+}
+
+func rewriteFile(path string, wt io.WriterTo) error {
+	base := filepath.Base(path)
+	tmpPattern := fmt.Sprintf(".%s.*.tmp", base)
+	f, err := ioutil.TempFile(filepath.Dir(path), tmpPattern)
+	if err != nil {
+		return fmt.Errorf("opening tempfile: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := wt.WriteTo(f); err != nil {
+		return fmt.Errorf("writing tempfile: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("closing tempfile: %w", err)
+	}
+	if err := os.Rename(f.Name(), path); err != nil {
+		return fmt.Errorf("error moving tempfile %q: %w", f.Name(), err)
+	}
+	return nil
 }
 
 func defaultConfigDir() string {
@@ -45,7 +75,7 @@ func defaultConfigDir() string {
 	return ""
 }
 
-func getKeyPaths() (pubKeyPath, privKeyPath string, err error) {
+func getUserKeyPaths() (pubKeyPath, privKeyPath string, err error) {
 	if keyFlag != "" {
 		privKeyPath = keyFlag
 	} else if configDir == "" {
@@ -64,12 +94,15 @@ func getKeyPaths() (pubKeyPath, privKeyPath string, err error) {
 	return pubKeyPath, privKeyPath, nil
 }
 
-func readPublicKey() (*internal.PublicKey, error) {
-	path, _, err := getKeyPaths()
+func readUserPublicKey() (*internal.PublicKey, error) {
+	path, _, err := getUserKeyPaths()
 	if err != nil {
 		return nil, err
 	}
+	return readPublicKey(path)
+}
 
+func readPublicKey(path string) (*internal.PublicKey, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -82,8 +115,8 @@ func readPublicKey() (*internal.PublicKey, error) {
 	return pubKey, nil
 }
 
-func readPrivateKey() (*internal.PrivateKey, error) {
-	_, path, err := getKeyPaths()
+func readUserPrivateKey() (*internal.PrivateKey, error) {
+	_, path, err := getUserKeyPaths()
 	if err != nil {
 		return nil, err
 	}

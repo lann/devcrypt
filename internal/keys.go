@@ -49,11 +49,16 @@ type PublicKey struct {
 	key   *[32]byte
 }
 
+// KeyBase64 returns the base64-encoded public key.
+func (k *PublicKey) KeyBase64() string {
+	return base64.StdEncoding.EncodeToString(k.key[:])
+}
+
 // MarshalString encodes the PublicKey into a single line like SSH's authorized_keys.
 func (k *PublicKey) MarshalString() string {
 	return fmt.Sprintf("%s %s %s",
 		keyType,
-		base64.StdEncoding.EncodeToString(k.key[:]),
+		k.KeyBase64(),
 		k.Label,
 	)
 }

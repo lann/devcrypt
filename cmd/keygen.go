@@ -30,7 +30,7 @@ var keygenCmd = &cobra.Command{
 	Use:   "keygen",
 	Short: "Generate a new key",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		pubKeyPath, privKeyPath, err := getKeyPaths()
+		pubKeyPath, privKeyPath, err := getUserKeyPaths()
 		if err != nil {
 			return err
 		}

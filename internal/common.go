@@ -23,12 +23,13 @@ func decodeBase64Key(key *[32]byte, data string) error {
 }
 
 func splitLineFields(line, firstFieldExpect string, fieldCount int) ([]string, error) {
+	fieldCount++ // arg doesn't include first field
 	line = strings.TrimSpace(line)
 	if strings.ContainsRune(line, '\n') {
 		return nil, errUnexpectedNewline
 	}
 
-	fields := strings.SplitN(line, " ", fieldCount+1)
+	fields := strings.SplitN(line, " ", fieldCount)
 	if len(fields) != fieldCount {
 		return nil, fmt.Errorf("expected %d fields, got %d", fieldCount, len(fields))
 	}

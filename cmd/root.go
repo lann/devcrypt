@@ -34,7 +34,9 @@ func init() {
 	rootCmd.AddCommand(addCmd)
 	rootCmd.AddCommand(decryptCmd)
 	rootCmd.AddCommand(encryptCmd)
+	rootCmd.AddCommand(infoCmd)
 	rootCmd.AddCommand(keygenCmd)
+	rootCmd.AddCommand(rmCmd)
 }
 
 // Execute executes.

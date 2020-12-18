@@ -25,7 +25,7 @@ var encryptCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Get user keys
-		pubKey, err := readPublicKey()
+		pubKey, err := readUserPublicKey()
 		if err != nil {
 			return fmt.Errorf("reading public key: %w", err)
 		}

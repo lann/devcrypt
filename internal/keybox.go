@@ -20,7 +20,7 @@ func (b *KeyBox) MarshalString() string {
 	return fmt.Sprintf("%s %s %s %s",
 		keyBoxType,
 		base64.StdEncoding.EncodeToString(b.box),
-		base64.StdEncoding.EncodeToString(b.key[:]),
+		b.KeyBase64(),
 		b.Label,
 	)
 }
