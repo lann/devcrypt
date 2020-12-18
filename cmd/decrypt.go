@@ -24,6 +24,8 @@ var decryptCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		input := args[0]
+
+		// Derive output path (if not given)
 		output := decryptOutput
 		if output == "" {
 			suffix := ".devcrypt"

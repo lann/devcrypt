@@ -37,7 +37,7 @@ func (b *KeyBox) UnmarshalString(data string) error {
 		return fmt.Errorf("boxed key decode: %w", err)
 	}
 
-	b.key = new([32]byte)
+	b.PublicKey = &PublicKey{key: new([32]byte)}
 	if err := decodeBase64Key(b.key, fields[1]); err != nil {
 		return fmt.Errorf("pubkey decode: %w", err)
 	}

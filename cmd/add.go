@@ -19,6 +19,7 @@ var addCmd = &cobra.Command{
 			return err
 		}
 
+		// Read given pubkey(s)
 		pubKeyPaths := args[1:]
 		pubKeys := make([]*internal.PublicKey, len(pubKeyPaths))
 		for i, pubKeyPath := range pubKeyPaths {
@@ -28,6 +29,7 @@ var addCmd = &cobra.Command{
 			}
 		}
 
+		// Add pubkey(s) to file
 		for i := range pubKeys {
 			pubKey := pubKeys[i]
 			fmt.Printf("Adding public key labeled %q\n", pubKey.Label)

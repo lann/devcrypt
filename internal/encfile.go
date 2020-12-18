@@ -143,7 +143,7 @@ func (f *EncFile) ReadFrom(r io.Reader) (n int64, err error) {
 			return n, err
 		}
 
-		keyBox := KeyBox{PublicKey: &PublicKey{}}
+		keyBox := KeyBox{}
 		if err := keyBox.UnmarshalString(line); err != nil {
 			return n, fmt.Errorf("%w (at line %d)", err, lineNum)
 		}

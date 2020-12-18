@@ -35,6 +35,7 @@ var keygenCmd = &cobra.Command{
 			return err
 		}
 
+		// Don't overwrite private key unless explicitly requested
 		if !keygenForce {
 			if _, err := os.Stat(privKeyPath); !os.IsNotExist(err) {
 				return fmt.Errorf("key file %q already exists; --force to replace it", privKeyPath)
