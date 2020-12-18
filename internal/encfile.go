@@ -6,7 +6,6 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/pem"
@@ -14,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"strings"
 
 	"golang.org/x/crypto/nacl/box"
 	"golang.org/x/crypto/nacl/secretbox"
@@ -32,7 +30,6 @@ var (
 	// ErrAlreadyAdded means the public key was already added
 	ErrAlreadyAdded = errors.New("public key already added")
 
-	errBadKeyBoxEncoding  = errors.New("invalid keybox encoding")
 	errBadEncFileEncoding = errors.New("invalid encrypted file encoding")
 )
 
@@ -99,13 +96,13 @@ func (f *UnsealedEncFile) AddPublicKey(pubKey *PublicKey) error {
 	if f.getKeyBox(pubKey) != nil {
 		return ErrAlreadyAdded
 	}
-	boxedKey, err := box.SealAnonymous(nil, f.fileKey[:], pubKey.bytes, rand.Reader)
+	boxedKey, err := box.SealAnonymous(nil, f.fileKey[:], pubKey.key, rand.Reader)
 	if err != nil {
 		return fmt.Errorf("sealing file key: %w", err)
 	}
 	f.keyBoxes = append(f.keyBoxes, KeyBox{
-		boxedKey: boxedKey,
-		pubKey:   pubKey,
+		box:       boxedKey,
+		PublicKey: pubKey,
 	})
 	return nil
 }
@@ -151,7 +148,7 @@ func (f *EncFile) Unseal(privKey *PrivateKey) (*UnsealedEncFile, error) {
 		return nil, fmt.Errorf("no key box found for key labeled %q", privKey.Label)
 	}
 	var fileKey [32]byte
-	out, ok := box.OpenAnonymous(fileKey[:0], keyBox.boxedKey, keyBox.pubKey.bytes, privKey.bytes)
+	out, ok := box.OpenAnonymous(fileKey[:0], keyBox.box, keyBox.PublicKey.key, privKey.key)
 	if !ok || len(out) != len(fileKey) {
 		return nil, fmt.Errorf("unboxing key failed with private key %q", privKey.Label)
 	}
@@ -160,8 +157,8 @@ func (f *EncFile) Unseal(privKey *PrivateKey) (*UnsealedEncFile, error) {
 
 func (f *EncFile) getKeyBox(pubKey *PublicKey) *KeyBox {
 	for i := range f.keyBoxes {
-		pubKeyBytes := f.keyBoxes[i].pubKey.bytes
-		if *pubKeyBytes == *pubKey.bytes {
+		pubKeyBytes := f.keyBoxes[i].PublicKey.key
+		if *pubKeyBytes == *pubKey.key {
 			return &f.keyBoxes[i]
 		}
 	}
@@ -237,48 +234,4 @@ func (f *EncFile) ReadFrom(r io.Reader) (n int64, err error) {
 	f.ciphertext = block.Bytes
 
 	return n, nil
-}
-
-// KeyBox stores an encryption key encrypted for a PublicKey.
-type KeyBox struct {
-	boxedKey []byte
-	pubKey   *PublicKey
-}
-
-// MarshalString encodes the KeyBox into a single line.
-func (b *KeyBox) MarshalString() string {
-	return fmt.Sprintf("devcrypt-keybox %s %s %s",
-		base64.StdEncoding.EncodeToString(b.boxedKey),
-		b.pubKey.Base64Key(),
-		b.pubKey.Label,
-	)
-}
-
-// UnmarshalString decodes the KeyBox from a single line.
-func (b *KeyBox) UnmarshalString(data string) error {
-	data = strings.TrimSpace(data)
-	if strings.ContainsRune(data, '\n') {
-		return errBadKeyBoxEncoding
-	}
-
-	fields := strings.SplitN(data, " ", 4)
-	if len(fields) != 4 || fields[0] != "devcrypt-keybox" {
-		return errBadKeyBoxEncoding
-	}
-
-	var err error
-	b.boxedKey, err = base64.StdEncoding.DecodeString(fields[1])
-	if err != nil {
-		return fmt.Errorf("boxed key decode: %w", err)
-	}
-
-	if b.pubKey == nil {
-		b.pubKey = &PublicKey{bytes: new([32]byte)}
-	}
-	if err := base64DecodeKey(b.pubKey.bytes, fields[2]); err != nil {
-		return fmt.Errorf("pubkey decode: %w", err)
-	}
-
-	b.pubKey.Label = fields[3]
-	return nil
 }

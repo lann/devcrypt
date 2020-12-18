@@ -15,6 +15,7 @@ import (
 
 const (
 	privateKeyBlockType = "DEVCRYPT PRIVATE KEY"
+	keyType             = "devcrypt-key"
 )
 
 var (
@@ -22,8 +23,8 @@ var (
 	errLabelNewline   = errors.New("labels may not contain newlines")
 )
 
-// GenerateKey generates a new PublicKey and PrivateKey pair.
-func GenerateKey(label string) (*PublicKey, *PrivateKey, error) {
+// GenerateKeys generates a new PublicKey and PrivateKey pair.
+func GenerateKeys(label string) (*PublicKey, *PrivateKey, error) {
 	if strings.ContainsRune(label, '\n') {
 		return nil, nil, errLabelNewline
 	}
@@ -33,11 +34,11 @@ func GenerateKey(label string) (*PublicKey, *PrivateKey, error) {
 	}
 	pubKey := &PublicKey{
 		Label: label,
-		bytes: pubKeyBytes,
+		key:   pubKeyBytes,
 	}
 	privKey := &PrivateKey{
 		Label: label,
-		bytes: privKeyBytes,
+		key:   privKeyBytes,
 	}
 	return pubKey, privKey, nil
 }
@@ -45,54 +46,43 @@ func GenerateKey(label string) (*PublicKey, *PrivateKey, error) {
 // PublicKey stores the public key and label.
 type PublicKey struct {
 	Label string
-	bytes *[32]byte
-}
-
-// Base64Key returns the base64-encoded public key.
-func (k *PublicKey) Base64Key() string {
-	return base64.StdEncoding.EncodeToString(k.bytes[:])
+	key   *[32]byte
 }
 
 // MarshalString encodes the PublicKey into a single line like SSH's authorized_keys.
 func (k *PublicKey) MarshalString() string {
-	return fmt.Sprintf("devcrypt-key %s %s",
-		k.Base64Key(),
+	return fmt.Sprintf("%s %s %s",
+		keyType,
+		base64.StdEncoding.EncodeToString(k.key[:]),
 		k.Label,
 	)
 }
 
 // UnmarshalString decodes the PublicKey from a single line.
 func (k *PublicKey) UnmarshalString(data string) error {
-	data = strings.TrimSpace(data)
-	if strings.ContainsRune(data, '\n') {
-		return errBadKeyEncoding
+	fields, err := splitLineFields(data, keyType, 2)
+	if err != nil {
+		return fmt.Errorf("key decode: %w", err)
 	}
 
-	fields := strings.SplitN(data, " ", 3)
-	if len(fields) != 3 || fields[0] != "devcrypt-key" {
-		return errBadKeyEncoding
-	}
-
-	if k.bytes == nil {
-		k.bytes = new([32]byte)
-	}
-	if err := base64DecodeKey(k.bytes, fields[1]); err != nil {
+	k.key = new([32]byte)
+	if err := decodeBase64Key(k.key, fields[0]); err != nil {
 		return fmt.Errorf("decode public key: %w", err)
 	}
-	k.Label = fields[2]
+	k.Label = fields[1]
 	return nil
 }
 
 // PrivateKey stores the private key and label.
 type PrivateKey struct {
 	Label string
-	bytes *[32]byte
+	key   *[32]byte
 }
 
 func (k *PrivateKey) publicKey() *PublicKey {
 	// DANGER: this depends on the undocumented internals of golang.org/x/crypto/nacl/box !!!
-	pubKey := &PublicKey{Label: k.Label, bytes: new([32]byte)}
-	curve25519.ScalarBaseMult(pubKey.bytes, k.bytes)
+	pubKey := &PublicKey{Label: k.Label, key: new([32]byte)}
+	curve25519.ScalarBaseMult(pubKey.key, k.key)
 	return pubKey
 }
 
@@ -101,7 +91,7 @@ func (k *PrivateKey) Marshal() ([]byte, error) {
 	block := &pem.Block{
 		Type:    privateKeyBlockType,
 		Headers: map[string]string{"Label": k.Label},
-		Bytes:   k.bytes[:],
+		Bytes:   k.key[:],
 	}
 	var buf bytes.Buffer
 	if err := pem.Encode(&buf, block); err != nil {
@@ -117,11 +107,11 @@ func (k *PrivateKey) Unmarshal(blockBytes []byte) error {
 		return errBadKeyEncoding
 	}
 	k.Label = block.Headers["Label"]
-	if k.bytes == nil {
-		k.bytes = new([32]byte)
+	if k.key == nil {
+		k.key = new([32]byte)
 	}
-	n := copy(k.bytes[:], block.Bytes)
-	if n != len(k.bytes) {
+	n := copy(k.key[:], block.Bytes)
+	if n != len(k.key) {
 		return errBadKeyEncoding
 	}
 	return nil
@@ -130,15 +120,4 @@ func (k *PrivateKey) Unmarshal(blockBytes []byte) error {
 // GoString doesn't print the private key bytes.
 func (k *PrivateKey) GoString() string {
 	return fmt.Sprintf("PrivateKey{Label: %q}", k.Label)
-}
-
-func base64DecodeKey(key *[32]byte, data string) error {
-	n, err := base64.StdEncoding.Decode(key[:], []byte(data))
-	if err != nil {
-		return err
-	}
-	if n != len(key) {
-		return fmt.Errorf("key too short: %d", n)
-	}
-	return nil
 }

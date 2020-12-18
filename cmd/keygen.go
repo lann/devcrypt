@@ -52,7 +52,7 @@ var keygenCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Generating key with label %q...\n", label)
-		pubKey, privKey, err := internal.GenerateKey(label)
+		pubKey, privKey, err := internal.GenerateKeys(label)
 		if err != nil {
 			return fmt.Errorf("key generation failed: %w", err)
 		}
