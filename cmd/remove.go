@@ -6,8 +6,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rmCmd = &cobra.Command{
-	Use:   "rm",
+var removeCmd = &cobra.Command{
+	Use:   "remove",
 	Short: "Remove a public key from an encrypted file",
 	Args:  cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {

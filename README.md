@@ -74,7 +74,7 @@ Decrypted to ".env"
 ### Remove a friend (or enemy?) from your encrypted file
 
 ```
-$ devcrypt rm .env.devcrypt lann@computer
+$ devcrypt remove .env.devcrypt lann@computer
 Removing public key by label "lann@computer":
 devcrypt-key cpCWOPP0/afWR3YkfrxZ6KptOO9pAZflm3LF6ChoTXU= lann@computer
 
