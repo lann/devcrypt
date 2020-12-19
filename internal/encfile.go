@@ -42,7 +42,7 @@ type EncFile struct {
 	keyBoxes []KeyBox
 
 	Filename   string
-	macHex     string
+	MAC        []byte
 	ciphertext []byte
 }
 
@@ -117,8 +117,8 @@ func (f *EncFile) WriteTo(w io.Writer) (n int64, err error) {
 	if f.Filename != "" {
 		headers["Filename"] = f.Filename
 	}
-	if f.macHex != "" {
-		headers["MAC"] = f.macHex
+	if len(f.MAC) > 0 {
+		headers["MAC"] = hex.EncodeToString(f.MAC)
 	}
 	blockBytes := pem.EncodeToMemory(&pem.Block{
 		Type:    encryptedFileBlockType,
@@ -168,8 +168,14 @@ func (f *EncFile) ReadFrom(r io.Reader) (n int64, err error) {
 	if block.Type != encryptedFileBlockType {
 		return n, fmt.Errorf("unknown block type %q", block.Type)
 	}
+
 	f.Filename = block.Headers["Filename"]
-	f.macHex = block.Headers["MAC"]
+
+	f.MAC, err = hex.DecodeString(block.Headers["MAC"])
+	if err != nil {
+		return n, fmt.Errorf("decoding MAC: %w", err)
+	}
+
 	f.ciphertext = block.Bytes
 
 	return n, nil
@@ -182,13 +188,36 @@ type UnsealedEncFile struct {
 }
 
 // NewUnsealedEncFile encrypts the given content and returns a new UnsealedEncFile.
-func NewUnsealedEncFile(filename string, plaintext []byte) (*UnsealedEncFile, error) {
+func NewUnsealedEncFile(filename string) (*UnsealedEncFile, error) {
 	var fileKey [32]byte
 	if _, err := rand.Read(fileKey[:]); err != nil {
 		return nil, err
 	}
+	return &UnsealedEncFile{
+		EncFile: &EncFile{Filename: filename},
+		fileKey: &fileKey,
+	}, nil
+}
 
-	mac := hmac.New(sha256.New, fileKey[:])
+// AddPublicKey adds the given PublicKey to the EncFile.
+func (f *UnsealedEncFile) AddPublicKey(pubKey *PublicKey) error {
+	if f.getKeyBox(pubKey) != nil {
+		return ErrAlreadyAdded
+	}
+	boxedKey, err := box.SealAnonymous(nil, f.fileKey[:], pubKey.key, rand.Reader)
+	if err != nil {
+		return fmt.Errorf("sealing file key: %w", err)
+	}
+	f.keyBoxes = append(f.keyBoxes, KeyBox{
+		box:       boxedKey,
+		PublicKey: pubKey,
+	})
+	return nil
+}
+
+// Encrypt encrypts the file contents.
+func (f *UnsealedEncFile) Encrypt(plaintext []byte) {
+	mac := hmac.New(sha256.New, f.fileKey[:])
 
 	var out []byte
 	var chunkNum uint64 = 0
@@ -211,33 +240,10 @@ func NewUnsealedEncFile(filename string, plaintext []byte) (*UnsealedEncFile, er
 		chunkNum++
 
 		// Encrypt the chunk
-		out = secretbox.Seal(out, chunk, &nonce, &fileKey)
+		out = secretbox.Seal(out, chunk, &nonce, f.fileKey)
 	}
-
-	return &UnsealedEncFile{
-		EncFile: &EncFile{
-			Filename:   filename,
-			macHex:     hex.EncodeToString(mac.Sum(nil)),
-			ciphertext: out,
-		},
-		fileKey: &fileKey,
-	}, nil
-}
-
-// AddPublicKey adds the given PublicKey to the EncFile.
-func (f *UnsealedEncFile) AddPublicKey(pubKey *PublicKey) error {
-	if f.getKeyBox(pubKey) != nil {
-		return ErrAlreadyAdded
-	}
-	boxedKey, err := box.SealAnonymous(nil, f.fileKey[:], pubKey.key, rand.Reader)
-	if err != nil {
-		return fmt.Errorf("sealing file key: %w", err)
-	}
-	f.keyBoxes = append(f.keyBoxes, KeyBox{
-		box:       boxedKey,
-		PublicKey: pubKey,
-	})
-	return nil
+	f.ciphertext = out
+	f.MAC = mac.Sum(nil)
 }
 
 // Decrypt decrypts the file contents.

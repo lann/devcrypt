@@ -55,9 +55,10 @@ func TestUnsealedEncFile_LargePlaintext(t *testing.T) {
 	_, err := rand.Read(testData)
 	assert.NoError(t, err)
 
-	unsealedFile, err := NewUnsealedEncFile("testFile", testData)
+	unsealedFile, err := NewUnsealedEncFile("testFile")
 	assert.NoError(t, err)
 
+	unsealedFile.Encrypt(testData)
 	assert.Equal(t, testDataLen, unsealedFile.FileSize())
 
 	plaintext, err := unsealedFile.Decrypt()
@@ -72,8 +73,10 @@ func generateTestUnsealedEncFile(t *testing.T) (*UnsealedEncFile, *PublicKey, *P
 	pubKey, privKey, err := GenerateKeys("testLabel")
 	assert.NoError(t, err)
 
-	unsealedFile, err := NewUnsealedEncFile("testFile", []byte("testData"))
+	unsealedFile, err := NewUnsealedEncFile("testFile")
 	assert.NoError(t, err)
+
+	unsealedFile.Encrypt([]byte("testData"))
 
 	err = unsealedFile.AddPublicKey(pubKey)
 	assert.NoError(t, err)

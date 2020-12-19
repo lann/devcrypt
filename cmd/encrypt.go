@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -30,35 +31,53 @@ var encryptCmd = &cobra.Command{
 			return fmt.Errorf("reading public key: %w", err)
 		}
 
-		// Read plaintext
+		// Check for existing encrypted file
 		input := args[0]
+		output := encryptOutput
+		if output == "" {
+			output = input + ".devcrypt"
+		}
+
+		unsealedFile, err := unsealFile(output)
+		if os.IsNotExist(err) {
+			// Initialize new encrypted file
+			unsealedFile, err = internal.NewUnsealedEncFile(input)
+			if err != nil {
+				return fmt.Errorf("initing unsealed file: %w", err)
+			}
+			// Add user's pubkey to the encrypted file
+			if err := unsealedFile.AddPublicKey(pubKey); err != nil {
+				return fmt.Errorf("adding public key: %w", err)
+			}
+		} else if err != nil {
+			return fmt.Errorf("unsealing existing file: %w", err)
+		}
+		existingMAC := unsealedFile.MAC
+
+		// Read plaintext
 		data, err := ioutil.ReadFile(input)
 		if err != nil {
 			return fmt.Errorf("reading file: %w", err)
 		}
 
 		// Encrypt file
-		encFile, err := internal.NewUnsealedEncFile(input, data)
+		unsealedFile.Encrypt(data)
 		if err != nil {
 			return fmt.Errorf("encrypting file: %w", err)
 		}
 
-		// Add user's pubkey to the encrypted file
-		if err := encFile.AddPublicKey(pubKey); err != nil {
-			return fmt.Errorf("adding public key: %w", err)
+		if bytes.Equal(unsealedFile.MAC, existingMAC) {
+			fmt.Printf("No change to %q\n", output)
+			return nil
 		}
 
 		// Write encrypted file
-		output := encryptOutput
-		if output == "" {
-			output = input + ".devcrypt"
-		}
 		f, err := os.Create(output)
 		if err != nil {
 			return fmt.Errorf("creating output file: %w", err)
 		}
 		defer f.Close()
-		if _, err := encFile.WriteTo(f); err != nil {
+		if _, err := unsealedFile.WriteTo(f); err != nil {
 			return fmt.Errorf("writing outout: %w", err)
 		}
 
