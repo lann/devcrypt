@@ -41,8 +41,10 @@ var (
 type EncFile struct {
 	keyBoxes []KeyBox
 
-	Filename   string
-	MAC        []byte
+	Filename string
+	MAC      []byte
+
+	nonce      []byte
 	ciphertext []byte
 }
 
@@ -120,6 +122,9 @@ func (f *EncFile) WriteTo(w io.Writer) (n int64, err error) {
 	if len(f.MAC) > 0 {
 		headers["MAC"] = hex.EncodeToString(f.MAC)
 	}
+	if len(f.nonce) > 0 {
+		headers["Nonce"] = hex.EncodeToString(f.nonce)
+	}
 	blockBytes := pem.EncodeToMemory(&pem.Block{
 		Type:    encryptedFileBlockType,
 		Headers: headers,
@@ -176,6 +181,11 @@ func (f *EncFile) ReadFrom(r io.Reader) (n int64, err error) {
 		return n, fmt.Errorf("decoding MAC: %w", err)
 	}
 
+	f.nonce, err = hex.DecodeString(block.Headers["Nonce"])
+	if err != nil {
+		return n, fmt.Errorf("decoding Nonce: %w", err)
+	}
+
 	f.ciphertext = block.Bytes
 
 	return n, nil
@@ -216,11 +226,21 @@ func (f *UnsealedEncFile) AddPublicKey(pubKey *PublicKey) error {
 }
 
 // Encrypt encrypts the file contents.
-func (f *UnsealedEncFile) Encrypt(plaintext []byte) {
+func (f *UnsealedEncFile) Encrypt(plaintext []byte) error {
 	mac := hmac.New(sha256.New, f.fileKey[:])
 
+	// Generate a random nonce
+	var nonce [24]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return fmt.Errorf("generating nonce: %w", err)
+	}
+
+	// Initialize counter from nonce
+	counter := binary.LittleEndian.Uint64(nonce[:])
+	var counterBytes [24]byte
+	copy(counterBytes[:], nonce[:])
+
 	var out []byte
-	var chunkNum uint64 = 0
 	for len(plaintext) > 0 {
 		// Get the next chunkSize-sized chunk
 		chunk := plaintext
@@ -234,23 +254,33 @@ func (f *UnsealedEncFile) Encrypt(plaintext []byte) {
 		// Update MAC
 		mac.Write(chunk)
 
-		// Since we gnerate a new key each time, we can just use the chunk counter here
-		var nonce [24]byte
-		binary.LittleEndian.PutUint64(nonce[:], chunkNum)
-		chunkNum++
+		// Update counter
+		binary.LittleEndian.PutUint64(counterBytes[:], counter)
+		counter++
 
 		// Encrypt the chunk
-		out = secretbox.Seal(out, chunk, &nonce, f.fileKey)
+		out = secretbox.Seal(out, chunk, &counterBytes, f.fileKey)
 	}
-	f.ciphertext = out
+
 	f.MAC = mac.Sum(nil)
+	f.nonce = nonce[:]
+	f.ciphertext = out
+	return nil
 }
 
 // Decrypt decrypts the file contents.
 func (f *UnsealedEncFile) Decrypt() ([]byte, error) {
 	ciphertext := f.ciphertext
+
+	// Initialize counter from nonce
+	var counter uint64
+	if len(f.nonce) > 0 {
+		counter = binary.LittleEndian.Uint64(f.nonce[:])
+	}
+	var counterBytes [24]byte
+	copy(counterBytes[:], f.nonce[:])
+
 	var out []byte
-	var chunkNum uint64 = 0
 	for len(ciphertext) > 0 {
 		// Get the next chunkSize+overhead-sized chunk
 		chunk := ciphertext
@@ -261,12 +291,12 @@ func (f *UnsealedEncFile) Decrypt() ([]byte, error) {
 			ciphertext = nil
 		}
 
-		var nonce [24]byte
-		binary.LittleEndian.PutUint64(nonce[:], chunkNum)
-		chunkNum++
+		// Update counter
+		binary.LittleEndian.PutUint64(counterBytes[:], counter)
+		counter++
 
 		var ok bool
-		out, ok = secretbox.Open(out, chunk, &nonce, f.fileKey)
+		out, ok = secretbox.Open(out, chunk, &counterBytes, f.fileKey)
 		if !ok {
 			return nil, fmt.Errorf("decrypt failed")
 		}

@@ -12,12 +12,16 @@ import (
 
 var (
 	encryptOutput string
+	encryptForce  bool
 )
 
 func init() {
 	flags := encryptCmd.Flags()
+
 	flags.StringVarP(&encryptOutput, "output", "o", "", "encrypted file output path")
 	flags.Lookup("output").DefValue = "<input file>.devcrypt"
+
+	flags.BoolVarP(&encryptForce, "force", "f", false, "force re-encryption even if the file didn't change")
 }
 
 var encryptCmd = &cobra.Command{
@@ -66,7 +70,8 @@ var encryptCmd = &cobra.Command{
 			return fmt.Errorf("encrypting file: %w", err)
 		}
 
-		if bytes.Equal(unsealedFile.MAC, existingMAC) {
+		// Don't re-encrypt unless plaintext has changed
+		if !encryptForce && bytes.Equal(unsealedFile.MAC, existingMAC) {
 			fmt.Printf("No change to %q\n", output)
 			return nil
 		}
