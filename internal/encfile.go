@@ -39,7 +39,7 @@ var (
 
 // EncFile stores KeyBoxes and an encrypted file.
 type EncFile struct {
-	keyBoxes []KeyBox
+	keyBoxes []*KeyBox
 
 	Filename string
 	MAC      []byte
@@ -100,7 +100,7 @@ func (f *EncFile) getKeyBox(pubKey *PublicKey) *KeyBox {
 	for i := range f.keyBoxes {
 		pubKeyBytes := f.keyBoxes[i].PublicKey.key
 		if *pubKeyBytes == *pubKey.key {
-			return &f.keyBoxes[i]
+			return f.keyBoxes[i]
 		}
 	}
 	return nil
@@ -148,7 +148,7 @@ func (f *EncFile) ReadFrom(r io.Reader) (n int64, err error) {
 			return n, err
 		}
 
-		keyBox := KeyBox{}
+		keyBox := &KeyBox{}
 		if err := keyBox.UnmarshalString(line); err != nil {
 			return n, fmt.Errorf("%w (at line %d)", err, lineNum)
 		}
@@ -214,15 +214,56 @@ func (f *UnsealedEncFile) AddPublicKey(pubKey *PublicKey) error {
 	if f.getKeyBox(pubKey) != nil {
 		return ErrAlreadyAdded
 	}
+	keyBox, err := f.sealKeyBox(pubKey)
+	if err != nil {
+		return err
+	}
+	f.keyBoxes = append(f.keyBoxes, keyBox)
+	return nil
+}
+
+// RotateFileKey generates a new file key and rebuilds the UnsealedEncFile with it.
+func (f *UnsealedEncFile) RotateFileKey() error {
+	// Decrypt
+	plaintext, err := f.Decrypt()
+	if err != nil {
+		return fmt.Errorf("decrypting message: %w", err)
+	}
+
+	// Regenerate file key
+	if _, err := rand.Read(f.fileKey[:]); err != nil {
+		return fmt.Errorf("regenerating file key: %w", err)
+	}
+
+	// Regenerate key boxes
+	var newKeyBoxes []*KeyBox
+	for _, keyBox := range f.keyBoxes {
+		newKeyBox, err := f.sealKeyBox(keyBox.PublicKey)
+		if err != nil {
+			return fmt.Errorf("regenerating key box %q: %w", keyBox.Label, err)
+		}
+		newKeyBoxes = append(newKeyBoxes, newKeyBox)
+	}
+
+	// Re-encrypt plaintext
+	if err := f.Encrypt(plaintext); err != nil {
+		return fmt.Errorf("re-encrypting plaintext: %w", err)
+	}
+
+	f.keyBoxes = newKeyBoxes
+	return nil
+}
+
+func (f *UnsealedEncFile) sealKeyBox(pubKey *PublicKey) (*KeyBox, error) {
 	boxedKey, err := box.SealAnonymous(nil, f.fileKey[:], pubKey.key, rand.Reader)
 	if err != nil {
-		return fmt.Errorf("sealing file key: %w", err)
+		return nil, fmt.Errorf("sealing file key: %w", err)
 	}
-	f.keyBoxes = append(f.keyBoxes, KeyBox{
+	return &KeyBox{
 		box:       boxedKey,
 		PublicKey: pubKey,
-	})
-	return nil
+	}, nil
+
 }
 
 // Encrypt encrypts the file contents.

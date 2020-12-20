@@ -37,6 +37,7 @@ func init() {
 	rootCmd.AddCommand(infoCmd)
 	rootCmd.AddCommand(keygenCmd)
 	rootCmd.AddCommand(removeCmd)
+	rootCmd.AddCommand(rotateCmd)
 }
 
 // Execute executes.

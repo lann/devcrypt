@@ -68,6 +68,24 @@ func TestUnsealedEncFile_LargePlaintext(t *testing.T) {
 	assert.Equal(t, testData, plaintext)
 }
 
+func TestUnsealedEncFile_RotateFileKey(t *testing.T) {
+	unsealedFile, pubKey, _ := generateTestUnsealedEncFile(t)
+
+	origFileKey := append([]byte{}, unsealedFile.fileKey[:]...)
+	origBox := unsealedFile.keyBoxes[0].box
+
+	err := unsealedFile.RotateFileKey()
+	assert.NoError(t, err)
+
+	assert.NotEqual(t, origFileKey, unsealedFile.fileKey[:])
+	assert.NotEqual(t, origBox, unsealedFile.keyBoxes[0].box)
+	assert.Equal(t, pubKey, unsealedFile.keyBoxes[0].PublicKey)
+
+	plaintext, err := unsealedFile.Decrypt()
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("testData"), plaintext)
+}
+
 func generateTestUnsealedEncFile(t *testing.T) (*UnsealedEncFile, *PublicKey, *PrivateKey) {
 	t.Helper()
 
