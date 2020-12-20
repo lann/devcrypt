@@ -65,7 +65,7 @@ var encryptCmd = &cobra.Command{
 		}
 
 		// Encrypt file
-		unsealedFile.Encrypt(data)
+		err = unsealedFile.Encrypt(data)
 		if err != nil {
 			return fmt.Errorf("encrypting file: %w", err)
 		}
