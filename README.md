@@ -10,6 +10,8 @@ e.g. email, DevCrypt may be for you.
 While DevCrypt is built on secure cryptographic elements, it is immature and
 hasn't been thoroughly reviewed by _anyone_, let alone cryptographic experts.
 
+For production secrets, consider [Mozilla's SOPS](https://github.com/mozilla/sops).
+
 ## Quickstart
 
 ### Install
